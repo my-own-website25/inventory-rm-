@@ -409,7 +409,7 @@
     <!-- Firebase SDK -->
     <script type="module">
         // Firebase Config
-      const firebaseConfig = {
+    const firebaseConfig = {
   apiKey: "AIzaSyCVwr4gRAqgF7r8tyvLTyYGt8CQcsJV160",
   authDomain: "rm-inventory-e29db.firebaseapp.com",
   projectId: "rm-inventory-e29db",
@@ -432,7 +432,7 @@
 
         // Global State
         let currentUserId = null;
-        let allSales = [], allItems = [], allCustomers = [], allCategories = [];
+        let saleItems = [], allSales = [], allItems = [], allCustomers = [], allCategories = [];
 
         // --- UI Elements ---
         const loginScreen = document.getElementById('login-screen');
@@ -523,10 +523,8 @@
 
         document.getElementById('logoutButton').addEventListener('click', () => signOut(auth));
         
-        // --- All other functions are here ---
-        // The full, working JS logic is included below
-        
-        function populateCategoryUI(categories) {
+        // --- UI POPULATION & RENDERING ---
+        const populateCategoryUI = (categories) => {
             const tableBody = document.getElementById('categoryTableBody');
             const dropdown = document.getElementById('itemCategory');
             if (!tableBody || !dropdown) return;
@@ -539,9 +537,9 @@
                     </td>
                 </tr>`).join('');
             dropdown.innerHTML = '<option value="">Select Category</option>' + categories.map(cat => `<option value="${cat.name}">${cat.name}</option>`).join('');
-        }
+        };
 
-        function populateItemTable(items) {
+        const populateItemTable = (items) => {
             const tableBody = document.getElementById('itemTableBody');
             if (!tableBody) return;
             tableBody.innerHTML = items.map(item => `
@@ -556,9 +554,9 @@
                         <button class="btn-danger-text font-medium" data-action="delete-item" data-id="${item.id}">Delete</button>
                     </td>
                 </tr>`).join('');
-        }
+        };
 
-        function populateCustomerTable(customers) {
+        const populateCustomerTable = (customers) => {
             const tableBody = document.getElementById('customerTableBody');
             if (!tableBody) return;
             tableBody.innerHTML = customers.map(cust => `
@@ -571,9 +569,9 @@
                         <button class="btn-danger-text font-medium" data-action="delete-customer" data-id="${cust.id}">Delete</button>
                     </td>
                 </tr>`).join('');
-        }
+        };
         
-        function populateSalesLogTable(sales) {
+        const populateSalesLogTable = (sales) => {
             const tableBody = document.getElementById('salesLogTableBody');
             if(!tableBody) return;
             tableBody.innerHTML = sales.sort((a, b) => new Date(b.date) - new Date(a.date)).map(sale => `
@@ -587,17 +585,17 @@
                         <button class="text-green-600 hover:text-green-800 font-medium" data-action="view-receipt" data-id="${sale.id}">View Receipt</button>
                     </td>
                 </tr>`).join('');
-        }
+        };
 
-        function populateLedgerCustomerDropdown(customers) {
+        const populateLedgerCustomerDropdown = (customers) => {
             const select = document.getElementById('ledgerCustomerSelect');
             if(!select) return;
             const currentVal = select.value;
             select.innerHTML = '<option value="">Select a Customer...</option>' + customers.map(c => `<option value="${c.id}">${c.name} (${c.code})</option>`).join('');
             select.value = currentVal;
-        }
+        };
 
-        function updateSaleItemsTable() {
+        const updateSaleItemsTable = () => {
             const tableBody = document.getElementById('saleItemsTableBody');
             let total = 0;
             tableBody.innerHTML = saleItems.map((item, index) => {
@@ -615,7 +613,7 @@
                     </tr>
                 `}).join('');
             document.getElementById('saleTotal').textContent = `BDT ${total.toFixed(2)}`;
-        }
+        };
 
         function showTab(tabId) {
             document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
@@ -672,7 +670,7 @@
             `;
         }
 
-        // --- Event Listeners ---
+        // --- EVENT HANDLERS & ACTIONS (using delegation) ---
         document.body.addEventListener('click', (e) => {
             const target = e.target.closest('button');
             if (!target) return;
@@ -709,7 +707,513 @@
             }
         });
         
-        // ... (All other functions from previous version are here)
+        // --- FORM SUBMISSIONS ---
+        document.getElementById('itemForm').addEventListener('submit', handleItemFormSubmit);
+        document.getElementById('customerForm').addEventListener('submit', handleCustomerFormSubmit);
+        document.getElementById('saleForm').addEventListener('submit', handleSaleFormSubmit);
+        document.getElementById('editCategoryForm').addEventListener('submit', handleEditCategorySubmit);
+        document.getElementById('paymentForm').addEventListener('submit', handlePaymentFormSubmit);
+
+        // --- All other functions are here ---
+        const populateSaleItemDropdown = (items) => {
+            const select = document.getElementById('saleItem');
+            select.innerHTML = '<option value="">Select Item</option>' + items.filter(i => i.stock > 0).map(i => `<option value="${i.id}">${i.name} (Stock: ${i.stock})</option>`).join('');
+        };
+        
+        const populateSaleCustomerDropdown = (customers) => {
+            const select = document.getElementById('saleCustomer');
+            select.innerHTML = '<option value="">Select Customer</option>' + customers.map(c => `<option value="${c.id}">${c.name} (${c.code})</option>`).join('');
+        };
+
+        async function handleItemFormSubmit(e) {
+            e.preventDefault();
+            if (!currentUserId) { updateStatus("Save Error: Not authenticated.", true); return; }
+            const id = document.getElementById('itemId').value;
+            const itemData = {
+                name: document.getElementById('itemName').value,
+                category: document.getElementById('itemCategory').value,
+                size: document.getElementById('itemSize').value,
+                price: parseFloat(document.getElementById('itemPrice').value),
+                stock: parseInt(document.getElementById('itemStock').value, 10)
+            };
+
+            try {
+                if (id) {
+                    await updateDoc(doc(db, `artifacts/${appId}/users/${currentUserId}/items`, id), itemData);
+                } else {
+                    await addDoc(collection(db, `artifacts/${appId}/users/${currentUserId}/items`), itemData);
+                }
+                closeModal(document.querySelector('#itemModal'));
+            } catch (err) {
+                updateStatus(`Save Error: ${err.message}`, true);
+            }
+        }
+        
+        async function handleCustomerFormSubmit(e) {
+            e.preventDefault();
+            if (!currentUserId) { updateStatus("Save Error: Not authenticated.", true); return; }
+            const id = document.getElementById('customerId').value;
+            
+            const customerData = {
+                name: document.getElementById('customerName').value,
+                address: document.getElementById('customerAddress').value,
+                number: document.getElementById('customerNumber').value,
+                shopName: document.getElementById('customerShopName').value,
+                due: 0 // New customers start with 0 due
+            };
+
+            try {
+                if (id) {
+                    // Prevent overwriting 'due' field on edit, only update other info
+                    const { due, ...updateData } = customerData;
+                    await updateDoc(doc(db, `artifacts/${appId}/users/${currentUserId}/customers`, id), updateData);
+                } else {
+                    const counterRef = doc(db, `artifacts/${appId}/users/${currentUserId}/counters/customerCounter`);
+                    const counterDoc = await getDoc(counterRef);
+                    const newCount = (counterDoc.exists() ? counterDoc.data().count : 0) + 1;
+                    
+                    customerData.code = `RM-${String(newCount).padStart(3, '0')}`;
+                    await addDoc(collection(db, `artifacts/${appId}/users/${currentUserId}/customers`), customerData);
+                    await setDoc(counterRef, { count: newCount }, { merge: true });
+                }
+                closeModal(document.querySelector('#customerModal'));
+            } catch (err) {
+                updateStatus(`Save Error: ${err.message}`, true);
+            }
+        }
+
+        async function handleSaleFormSubmit(e) {
+            e.preventDefault();
+            if (!currentUserId) { updateStatus("Save Error: Not authenticated.", true); return; }
+            const saleId = document.getElementById('saleId').value;
+            const customerId = document.getElementById('saleCustomer').value;
+            const customerDocRef = doc(db, `artifacts/${appId}/users/${currentUserId}/customers`, customerId);
+            const customerDoc = await getDoc(customerDocRef);
+            const customerName = customerDoc.exists() ? customerDoc.data().name : 'Unknown';
+
+            if (!customerId || saleItems.length === 0) {
+                alert("Please select a customer and add at least one item.");
+                return;
+            }
+            
+            const total = saleItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+            const saleData = {
+                customerId,
+                customerName,
+                items: saleItems,
+                date: new Date().toISOString(),
+                total: total
+            };
+
+            const batch = writeBatch(db);
+
+            try {
+                let saleRef;
+                if (saleId) { // Editing an existing sale
+                    saleRef = doc(db, `artifacts/${appId}/users/${currentUserId}/sales`, saleId);
+                    const originalSale = allSales.find(s => s.id === saleId);
+                    const originalTotal = originalSale.total;
+                    
+                    // Adjust customer due based on the change in sale total
+                    const totalDifference = total - originalTotal;
+                    const newDue = (customerDoc.data().due || 0) + totalDifference;
+                    batch.update(customerDocRef, { due: newDue });
+
+                    // Adjust stock
+                    const originalQuantities = {};
+                    originalSale.items.forEach(item => { originalQuantities[item.id] = item.quantity; });
+                    const newQuantities = {};
+                    saleItems.forEach(item => { newQuantities[item.id] = item.quantity; });
+                    const allItemIds = new Set([...Object.keys(originalQuantities), ...Object.keys(newQuantities)]);
+
+                    for (const itemId of allItemIds) {
+                        const originalQty = originalQuantities[itemId] || 0;
+                        const newQty = newQuantities[itemId] || 0;
+                        const quantityDifference = newQty - originalQty;
+
+                        if (quantityDifference !== 0) {
+                            const itemRef = doc(db, `artifacts/${appId}/users/${currentUserId}/items`, itemId);
+                            const dbItem = allItems.find(i => i.id === itemId);
+                            if (dbItem) {
+                                batch.update(itemRef, { stock: dbItem.stock - quantityDifference });
+                            }
+                        }
+                    }
+                    batch.update(saleRef, saleData);
+
+                } else { // Creating a new sale
+                    saleRef = doc(collection(db, `artifacts/${appId}/users/${currentUserId}/sales`));
+                    batch.set(saleRef, saleData);
+                    
+                    // Update customer due
+                    const newDue = (customerDoc.data().due || 0) + total;
+                    batch.update(customerDocRef, { due: newDue });
+
+                    // Update stock
+                    for (const item of saleItems) {
+                        const itemRef = doc(db, `artifacts/${appId}/users/${currentUserId}/items`, item.id);
+                        const dbItem = allItems.find(i => i.id === item.id);
+                        if (dbItem) {
+                            batch.update(itemRef, { stock: dbItem.stock - item.quantity });
+                        }
+                    }
+                }
+                
+                // Add transaction to customer's ledger
+                const transactionRef = doc(collection(db, `artifacts/${appId}/users/${currentUserId}/customers/${customerId}/transactions`));
+                batch.set(transactionRef, {
+                    type: 'sale',
+                    amount: total,
+                    date: serverTimestamp(),
+                    saleId: saleRef.id
+                });
+
+                await batch.commit();
+                closeModal(document.querySelector('#saleModal'));
+            } catch (err) {
+                updateStatus(`Save Error: ${err.message}`, true);
+            }
+        }
+        
+        async function handlePaymentFormSubmit(e) {
+            e.preventDefault();
+            const customerId = document.getElementById('ledgerCustomerSelect').value;
+            const amount = parseFloat(document.getElementById('paymentAmount').value);
+            if (!customerId || !amount || amount <= 0) {
+                alert("Please select a customer and enter a valid payment amount.");
+                return;
+            }
+
+            const customerRef = doc(db, `artifacts/${appId}/users/${currentUserId}/customers`, customerId);
+            const transactionRef = doc(collection(db, `artifacts/${appId}/users/${currentUserId}/customers/${customerId}/transactions`));
+            
+            try {
+                const customerDoc = await getDoc(customerRef);
+                if (!customerDoc.exists()) throw new Error("Customer not found");
+                
+                const newDue = customerDoc.data().due - amount;
+
+                const batch = writeBatch(db);
+                batch.update(customerRef, { due: newDue });
+                batch.set(transactionRef, {
+                    type: 'payment',
+                    amount: amount,
+                    date: serverTimestamp()
+                });
+                await batch.commit();
+                closeModal(document.querySelector('#paymentModal'));
+            } catch (error) {
+                updateStatus(`Payment Error: ${error.message}`, true);
+            }
+        }
+        
+        async function handleEditCategorySubmit(e) {
+            e.preventDefault();
+            const id = document.getElementById('editCategoryId').value;
+            const newName = document.getElementById('editCategoryName').value.trim();
+            if (newName && id) {
+                try {
+                    await updateDoc(doc(db, `artifacts/${appId}/users/${currentUserId}/categories`, id), { name: newName });
+                    closeModal(document.querySelector('#editCategoryModal'));
+                } catch (err) {
+                    updateStatus(`Save Error: ${err.message}`, true);
+                }
+            }
+        }
+
+        function addCategory() {
+            const nameInput = document.getElementById('newCategoryName');
+            const name = nameInput.value.trim();
+            if (name && currentUserId) {
+                addDoc(collection(db, `artifacts/${appId}/users/${currentUserId}/categories`), { name })
+                    .then(() => { nameInput.value = ''; })
+                    .catch(err => updateStatus(`Save Error: ${err.message}`, true));
+            }
+        }
+        
+        function addSaleItem() {
+            const itemId = document.getElementById('saleItem').value;
+            const quantity = parseInt(document.getElementById('saleQuantity').value, 10);
+            
+            if (!itemId || !quantity || quantity <= 0) {
+                alert("Please select an item and enter a valid quantity.");
+                return;
+            }
+            
+            const itemData = allItems.find(i => i.id === itemId);
+            if (itemData) {
+                if (itemData.stock < quantity) {
+                    alert(`Not enough stock for ${itemData.name}. Available: ${itemData.stock}`);
+                    return;
+                }
+                
+                const existingItemIndex = saleItems.findIndex(i => i.id === itemId);
+                if(existingItemIndex > -1){
+                    saleItems[existingItemIndex].quantity += quantity;
+                } else {
+                     saleItems.push({
+                        id: itemId,
+                        name: itemData.name,
+                        price: itemData.price,
+                        quantity: quantity,
+                        addedDate: new Date().toISOString()
+                    });
+                }
+
+                updateSaleItemsTable();
+                document.getElementById('saleQuantity').value = '';
+            }
+        }
+
+        function removeSaleItem(index) {
+            saleItems.splice(index, 1);
+            updateSaleItemsTable();
+        }
+
+        function filterItems() {
+            const filter = document.getElementById('itemSearch').value.toLowerCase();
+            document.querySelectorAll('#itemTableBody .item-row').forEach(row => {
+                const name = row.dataset.name;
+                const category = row.dataset.category;
+                row.style.display = (name.includes(filter) || category.includes(filter)) ? '' : 'none';
+            });
+        }
+        
+        function filterCustomers() {
+            const filter = document.getElementById('customerSearch').value.toLowerCase();
+            document.querySelectorAll('#customerTableBody .customer-row').forEach(row => {
+                const name = row.dataset.name;
+                const code = row.dataset.code;
+                row.style.display = (name.includes(filter) || code.includes(filter)) ? '' : 'none';
+            });
+        }
+
+        function openItemModal() {
+            document.getElementById('itemForm').reset();
+            document.getElementById('itemId').value = '';
+            document.getElementById('itemModalTitle').innerText = 'Add New Item';
+            document.getElementById('itemModal').classList.add('active');
+        }
+
+        function openCustomerModal() {
+            document.getElementById('customerForm').reset();
+            document.getElementById('customerId').value = '';
+            document.getElementById('customerModalTitle').innerText = 'Add New Customer';
+            document.getElementById('customerModal').classList.add('active');
+        }
+
+        function openSaleModal(isEditing = false) {
+            if(!isEditing){
+                saleItems = [];
+                document.getElementById('saleForm').reset();
+                document.getElementById('saleId').value = '';
+                document.getElementById('saleModalTitle').innerText = 'Create New Sale';
+                document.getElementById('saleCustomer').disabled = false;
+            }
+            updateSaleItemsTable();
+            document.getElementById('saleModal').classList.add('active');
+        }
+
+        function openPaymentModal() {
+            const customerId = document.getElementById('ledgerCustomerSelect').value;
+            if (!customerId) {
+                alert("Please select a customer first.");
+                return;
+            }
+            const customer = allCustomers.find(c => c.id === customerId);
+            document.getElementById('paymentCustomerName').textContent = customer.name;
+            document.getElementById('paymentCustomerDue').textContent = `${customer.due.toFixed(2)} BDT`;
+            document.getElementById('paymentModal').classList.add('active');
+        }
+
+        function closeModal(button) {
+            button.closest('.modal').classList.remove('active');
+        }
+
+        function openConfirmationModal(title, message, onConfirm) {
+            document.getElementById('confirmModalTitle').textContent = title;
+            document.getElementById('confirmModalMessage').textContent = message;
+            const confirmButton = document.getElementById('confirmModalButton');
+            
+            const newConfirmButton = confirmButton.cloneNode(true);
+            confirmButton.parentNode.replaceChild(newConfirmButton, confirmButton);
+
+            newConfirmButton.onclick = () => {
+                onConfirm();
+                closeModal(newConfirmButton);
+            };
+            document.getElementById('confirmModal').classList.add('active');
+        }
+
+        async function editItem(id) {
+            const item = allItems.find(i => i.id === id);
+            if (item) {
+                document.getElementById('itemId').value = item.id;
+                document.getElementById('itemName').value = item.name;
+                document.getElementById('itemCategory').value = item.category;
+                document.getElementById('itemSize').value = item.size || '';
+                document.getElementById('itemPrice').value = item.price;
+                document.getElementById('itemStock').value = item.stock;
+                document.getElementById('itemModalTitle').innerText = 'Edit Item';
+                document.getElementById('itemModal').classList.add('active');
+            }
+        }
+
+        async function deleteItem(id) {
+            openConfirmationModal('Delete Item', 'Are you sure you want to delete this item?', async () => {
+                try {
+                    await deleteDoc(doc(db, `artifacts/${appId}/users/${currentUserId}/items`, id));
+                } catch (e) { updateStatus(`Delete Error: ${e.message}`, true); }
+            });
+        }
+        
+        async function editCustomer(id) {
+            const customer = allCustomers.find(c => c.id === id);
+            if (customer) {
+                document.getElementById('customerId').value = customer.id;
+                document.getElementById('customerName').value = customer.name;
+                document.getElementById('customerAddress').value = customer.address;
+                document.getElementById('customerNumber').value = customer.number;
+                document.getElementById('customerShopName').value = customer.shopName || '';
+                document.getElementById('customerModalTitle').innerText = 'Edit Customer';
+                document.getElementById('customerModal').classList.add('active');
+            }
+        }
+
+        async function deleteCustomer(id) {
+            openConfirmationModal('Delete Customer', 'Are you sure you want to delete this customer?', async () => {
+                try {
+                    await deleteDoc(doc(db, `artifacts/${appId}/users/${currentUserId}/customers`, id));
+                } catch (e) { updateStatus(`Delete Error: ${e.message}`, true); }
+            });
+        }
+
+        async function editCategory(id) {
+            const category = allCategories.find(c => c.id === id);
+            if (category) {
+                document.getElementById('editCategoryId').value = id;
+                document.getElementById('editCategoryName').value = category.name;
+                document.getElementById('editCategoryModal').classList.add('active');
+            }
+        }
+
+        async function deleteCategory(id) {
+            openConfirmationModal('Delete Category', 'Are you sure you want to delete this category?', async () => {
+                try {
+                    await deleteDoc(doc(db, `artifacts/${appId}/users/${currentUserId}/categories`, id));
+                } catch (e) { updateStatus(`Delete Error: ${e.message}`, true); }
+            });
+        }
+
+        async function editSale(saleId) {
+            const sale = allSales.find(s => s.id === saleId);
+            if(sale){
+                document.getElementById('saleModalTitle').innerText = 'Edit Sale';
+                document.getElementById('saleId').value = sale.id;
+                document.getElementById('saleCustomer').value = sale.customerId;
+                document.getElementById('saleCustomer').disabled = true;
+                saleItems = JSON.parse(JSON.stringify(sale.items));
+                updateSaleItemsTable();
+                openSaleModal(true);
+            }
+        }
+
+        async function viewReceipt(saleId) {
+            const sale = allSales.find(s => s.id === saleId);
+            const customer = allCustomers.find(c => c.id === sale.customerId);
+            if (sale && customer) {
+                document.getElementById('receipt-customer-details').innerHTML = `
+                    <h3 class="text-lg font-semibold mb-2">Billed To:</h3>
+                    <p><strong>${customer.name || 'N/A'}</strong> (${customer.code || 'N/A'})</p>
+                    <p>${customer.address || 'N/A'}</p>
+                    <p>Phone: ${customer.number || 'N/A'}</p>
+                    <p>Shop: ${customer.shopName || 'N/A'}</p>
+                    <p class="mt-2"><strong>Invoice Date:</strong> ${new Date(sale.date).toLocaleString()}</p>
+                `;
+                
+                document.getElementById('receiptItemsTableBody').innerHTML = sale.items.map(item => `
+                    <tr class="border-b">
+                        <td class="p-2">${new Date(item.addedDate).toLocaleDateString()}</td>
+                        <td class="p-2">${item.name}</td>
+                        <td class="p-2 text-right">${item.quantity}</td>
+                        <td class="p-2 text-right">${item.price.toFixed(2)}</td>
+                        <td class="p-2 text-right">${(item.price * item.quantity).toFixed(2)}</td>
+                    </tr>
+                `).join('');
+
+                document.getElementById('receipt-total').innerHTML = `Total: BDT ${sale.total.toFixed(2)}`;
+                document.getElementById('receiptModal').classList.add('active');
+             }
+        }
+
+        function downloadReceipt() {
+            const { jsPDF } = window.jspdf;
+            const receiptContainer = document.getElementById('receipt-container');
+            
+            html2canvas(receiptContainer, { scale: 2 }).then(canvas => {
+                const imgData = canvas.toDataURL('image/png');
+                const pdf = new jsPDF({
+                    orientation: 'portrait',
+                    unit: 'pt',
+                    format: [canvas.width, canvas.height]
+                });
+                pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+                pdf.save(`RM-Invoice-${new Date().getTime()}.pdf`);
+            });
+        }
+        
+        function exportToExcelHandler() {
+            const startDate = new Date(document.getElementById('startDate').value);
+            const endDate = new Date(document.getElementById('endDate').value);
+            if (!document.getElementById('startDate').value || !document.getElementById('endDate').value) {
+                alert("Please select a start and end date for the report.");
+                return;
+            }
+            endDate.setHours(23, 59, 59, 999); // Include the whole end day
+
+            const filteredSales = allSales.filter(sale => {
+                const saleDate = new Date(sale.date);
+                return saleDate >= startDate && saleDate <= endDate;
+            });
+
+            if (filteredSales.length === 0) {
+                alert("No sales found in the selected date range.");
+                return;
+            }
+            exportToExcel(filteredSales);
+        }
+
+        function exportToExcel(data, filename = 'sales-report.csv') {
+            let csvContent = "Date,Customer Name,Item Name,Quantity,Price,Subtotal\r\n";
+            data.forEach(sale => {
+                const saleDate = new Date(sale.date).toLocaleDateString();
+                const customerName = sale.customerName.replace(/,/g, ''); // Remove commas from names
+                sale.items.forEach(item => {
+                    const row = [
+                        saleDate,
+                        customerName,
+                        item.name.replace(/,/g, ''),
+                        item.quantity,
+                        item.price.toFixed(2),
+                        (item.quantity * item.price).toFixed(2)
+                    ].join(',');
+                    csvContent += row + "\r\n";
+                });
+            });
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            if (link.download !== undefined) {
+                const url = URL.createObjectURL(blob);
+                link.setAttribute("href", url);
+                link.setAttribute("download", filename);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        }
     </script>
 </body>
 </html>
