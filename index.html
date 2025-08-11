@@ -483,6 +483,7 @@
                 allCustomers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 populateCustomerTable(allCustomers);
                 populateLedgerCustomerDropdown(allCustomers);
+                populateSaleCustomerDropdown(allCustomers); // FIX: This was missing
             }, err => updateStatus(`Error loading customers: ${err.message}`, true));
 
             onSnapshot(collection(db, `${path}/sales`), snap => {
@@ -593,6 +594,12 @@
             const currentVal = select.value;
             select.innerHTML = '<option value="">Select a Customer...</option>' + customers.map(c => `<option value="${c.id}">${c.name} (${c.code})</option>`).join('');
             select.value = currentVal;
+        };
+        
+        const populateSaleCustomerDropdown = (customers) => {
+            const select = document.getElementById('saleCustomer');
+            if (!select) return;
+            select.innerHTML = '<option value="">Select Customer</option>' + customers.map(c => `<option value="${c.id}">${c.name} (${c.code})</option>`).join('');
         };
 
         const updateSaleItemsTable = () => {
@@ -720,11 +727,6 @@
             select.innerHTML = '<option value="">Select Item</option>' + items.filter(i => i.stock > 0).map(i => `<option value="${i.id}">${i.name} (Stock: ${i.stock})</option>`).join('');
         };
         
-        const populateSaleCustomerDropdown = (customers) => {
-            const select = document.getElementById('saleCustomer');
-            select.innerHTML = '<option value="">Select Customer</option>' + customers.map(c => `<option value="${c.id}">${c.name} (${c.code})</option>`).join('');
-        };
-
         async function handleItemFormSubmit(e) {
             e.preventDefault();
             if (!currentUserId) { updateStatus("Save Error: Not authenticated.", true); return; }
@@ -759,20 +761,18 @@
                 address: document.getElementById('customerAddress').value,
                 number: document.getElementById('customerNumber').value,
                 shopName: document.getElementById('customerShopName').value,
-                due: 0 // New customers start with 0 due
             };
 
             try {
                 if (id) {
-                    // Prevent overwriting 'due' field on edit, only update other info
-                    const { due, ...updateData } = customerData;
-                    await updateDoc(doc(db, `artifacts/${appId}/users/${currentUserId}/customers`, id), updateData);
+                    await updateDoc(doc(db, `artifacts/${appId}/users/${currentUserId}/customers`, id), customerData);
                 } else {
                     const counterRef = doc(db, `artifacts/${appId}/users/${currentUserId}/counters/customerCounter`);
                     const counterDoc = await getDoc(counterRef);
                     const newCount = (counterDoc.exists() ? counterDoc.data().count : 0) + 1;
                     
                     customerData.code = `RM-${String(newCount).padStart(3, '0')}`;
+                    customerData.due = 0; // New customers start with 0 due
                     await addDoc(collection(db, `artifacts/${appId}/users/${currentUserId}/customers`), customerData);
                     await setDoc(counterRef, { count: newCount }, { merge: true });
                 }
@@ -815,12 +815,10 @@
                     const originalSale = allSales.find(s => s.id === saleId);
                     const originalTotal = originalSale.total;
                     
-                    // Adjust customer due based on the change in sale total
                     const totalDifference = total - originalTotal;
                     const newDue = (customerDoc.data().due || 0) + totalDifference;
                     batch.update(customerDocRef, { due: newDue });
 
-                    // Adjust stock
                     const originalQuantities = {};
                     originalSale.items.forEach(item => { originalQuantities[item.id] = item.quantity; });
                     const newQuantities = {};
@@ -846,11 +844,9 @@
                     saleRef = doc(collection(db, `artifacts/${appId}/users/${currentUserId}/sales`));
                     batch.set(saleRef, saleData);
                     
-                    // Update customer due
                     const newDue = (customerDoc.data().due || 0) + total;
                     batch.update(customerDocRef, { due: newDue });
 
-                    // Update stock
                     for (const item of saleItems) {
                         const itemRef = doc(db, `artifacts/${appId}/users/${currentUserId}/items`, item.id);
                         const dbItem = allItems.find(i => i.id === item.id);
@@ -860,7 +856,6 @@
                     }
                 }
                 
-                // Add transaction to customer's ledger
                 const transactionRef = doc(collection(db, `artifacts/${appId}/users/${currentUserId}/customers/${customerId}/transactions`));
                 batch.set(transactionRef, {
                     type: 'sale',
