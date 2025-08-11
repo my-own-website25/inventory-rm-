@@ -207,10 +207,13 @@
                     <div class="bg-white p-6 rounded-xl shadow-lg">
                         <div class="flex flex-wrap justify-between items-center mb-6">
                             <h2 class="text-3xl font-semibold text-slate-800">Sales Log</h2>
-                            <button data-action="open-sale-modal" class="btn btn-primary">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clip-rule="evenodd" /></svg>
-                                New Sale
-                            </button>
+                            <div class="flex items-center space-x-4">
+                                <input type="date" id="salesLogDateFilter" class="p-3 border rounded-lg">
+                                <button data-action="open-sale-modal" class="btn btn-primary">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clip-rule="evenodd" /></svg>
+                                    New Sale
+                                </button>
+                            </div>
                         </div>
                         <div class="overflow-x-auto">
                             <table class="min-w-full bg-white">
@@ -411,7 +414,7 @@
     <!-- Firebase SDK -->
     <script type="module">
         // Firebase Config
-       const firebaseConfig = {
+    const firebaseConfig = {
   apiKey: "AIzaSyCVwr4gRAqgF7r8tyvLTyYGt8CQcsJV160",
   authDomain: "rm-inventory-e29db.firebaseapp.com",
   projectId: "rm-inventory-e29db",
@@ -578,7 +581,23 @@
         const populateSalesLogTable = (sales) => {
             const tableBody = document.getElementById('salesLogTableBody');
             if(!tableBody) return;
-            tableBody.innerHTML = sales.sort((a, b) => new Date(b.date) - new Date(a.date)).map(sale => {
+            
+            const dateFilter = document.getElementById('salesLogDateFilter').value;
+            let filteredSales = sales;
+
+            if (dateFilter) {
+                const startOfDay = new Date(dateFilter);
+                startOfDay.setHours(0, 0, 0, 0);
+                const endOfDay = new Date(dateFilter);
+                endOfDay.setHours(23, 59, 59, 999);
+                
+                filteredSales = sales.filter(sale => {
+                    const saleDate = new Date(sale.date);
+                    return saleDate >= startOfDay && saleDate <= endOfDay;
+                });
+            }
+
+            tableBody.innerHTML = filteredSales.sort((a, b) => new Date(b.date) - new Date(a.date)).map(sale => {
                 const customer = allCustomers.find(c => c.id === sale.customerId);
                 const currentDue = customer ? customer.due : 0;
                 return `
@@ -760,6 +779,8 @@
                 `;
             });
         });
+
+        document.getElementById('salesLogDateFilter').addEventListener('change', () => populateSalesLogTable(allSales));
 
         // --- FORM SUBMISSIONS ---
         document.getElementById('itemForm').addEventListener('submit', handleItemFormSubmit);
