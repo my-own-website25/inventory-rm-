@@ -409,14 +409,14 @@
     <!-- Firebase SDK -->
     <script type="module">
         // Firebase Config
-      const firebaseConfig = {
-  apiKey: "AIzaSyCVwr4gRAqgF7r8tyvLTyYGt8CQcsJV160",
-  authDomain: "rm-inventory-e29db.firebaseapp.com",
-  projectId: "rm-inventory-e29db",
-  storageBucket: "rm-inventory-e29db.firebasestorage.app",
-  messagingSenderId: "811658826347",
-  appId: "1:811658826347:web:a7512b876fca11d107572e"
-};
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_AUTH_DOMAIN",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_STORAGE_BUCKET",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
         if (typeof __firebase_config !== 'undefined') { Object.assign(firebaseConfig, JSON.parse(__firebase_config)); }
 
         // Firebase Imports
@@ -592,7 +592,9 @@
         function populateLedgerCustomerDropdown(customers) {
             const select = document.getElementById('ledgerCustomerSelect');
             if(!select) return;
+            const currentVal = select.value;
             select.innerHTML = '<option value="">Select a Customer...</option>' + customers.map(c => `<option value="${c.id}">${c.name} (${c.code})</option>`).join('');
+            select.value = currentVal;
         }
 
         function updateSaleItemsTable() {
@@ -679,26 +681,35 @@
             if (!action) return;
 
             switch(action) {
-                // ... (all other actions)
+                case 'open-item-modal': openItemModal(); break;
+                case 'open-customer-modal': openCustomerModal(); break;
+                case 'open-sale-modal': openSaleModal(); break;
+                case 'close-modal': closeModal(target); break;
+                case 'add-category': addCategory(); break;
+                case 'add-sale-item': addSaleItem(); break;
+                case 'download-receipt': downloadReceipt(); break;
+                case 'edit-item': editItem(id); break;
+                case 'delete-item': deleteItem(id); break;
+                case 'edit-customer': editCustomer(id); break;
+                case 'delete-customer': deleteCustomer(id); break;
+                case 'edit-category': editCategory(id); break;
+                case 'delete-category': deleteCategory(id); break;
+                case 'edit-sale': editSale(id); break;
+                case 'view-receipt': viewReceipt(id); break;
+                case 'remove-sale-item': removeSaleItem(parseInt(target.dataset.index, 10)); break;
+                case 'open-payment-modal': openPaymentModal(); break;
+                case 'export-excel': exportToExcelHandler(); break;
             }
         });
 
+        document.getElementById('tab-nav').addEventListener('click', (e) => {
+            const target = e.target.closest('button');
+            if(target && target.dataset.tab) {
+                showTab(target.dataset.tab);
+            }
+        });
+        
         // ... (All other functions from previous version are here)
     </script>
 </body>
 </html>
-```
-
-### **What to Do Next**
-
-1.  **Deploy the new code** to your live website.
-2.  Open the website on any device.
-3.  Look at the **status bar** at the top.
-
-Now, the status bar will tell you exactly what is happening:
-
-* **If it says "Online":** The connection is successful, and you can register and log in.
-* **If it says "Offline":** This means you are not logged in.
-* **If it shows a red error message:** The message will tell you the exact reason for the failure (e.g., "Authentication Failed: Firebase: Error (auth/wrong-password).").
-
-This diagnostic tool will give us the final answer and allow us to solve this problem for go
