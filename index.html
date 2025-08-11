@@ -220,7 +220,7 @@
                                         <th class="py-3 px-4 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Customer</th>
                                         <th class="py-3 px-4 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Items</th>
                                         <th class="py-3 px-4 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">Total</th>
-                                        <th class="py-3 px-4 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">Due After Sale</th>
+                                        <th class="py-3 px-4 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">Current Due</th>
                                         <th class="py-3 px-4 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Actions</th>
                                     </tr>
                                 </thead>
@@ -349,6 +349,7 @@
                             <tbody id="receiptItemsTableBody"></tbody>
                          </table>
                     </div>
+                    <div id="receipt-payments-details" class="mt-6"></div>
                     <div id="receipt-total" class="text-right font-bold text-lg mt-6 border-t pt-4 space-y-2"></div>
                      <div class="text-center mt-8 text-xs text-slate-500"><p>Thank you for your business!</p></div>
                 </div>
@@ -410,7 +411,7 @@
     <!-- Firebase SDK -->
     <script type="module">
         // Firebase Config
-      const firebaseConfig = {
+       const firebaseConfig = {
   apiKey: "AIzaSyCVwr4gRAqgF7r8tyvLTyYGt8CQcsJV160",
   authDomain: "rm-inventory-e29db.firebaseapp.com",
   projectId: "rm-inventory-e29db",
@@ -577,18 +578,23 @@
         const populateSalesLogTable = (sales) => {
             const tableBody = document.getElementById('salesLogTableBody');
             if(!tableBody) return;
-            tableBody.innerHTML = sales.sort((a, b) => new Date(b.date) - new Date(a.date)).map(sale => `
-                <tr class="hover:bg-slate-50">
-                    <td class="py-3 px-4">${new Date(sale.date).toLocaleDateString()}</td>
-                    <td class="py-3 px-4">${sale.customerName}</td>
-                    <td class="py-3 px-4">${sale.items.length}</td>
-                    <td class="py-3 px-4 text-right">${(sale.total || 0).toFixed(2)}</td>
-                    <td class="py-3 px-4 text-right font-semibold">${(sale.newDue || 0).toFixed(2)}</td>
-                    <td class="py-3 px-4 text-center space-x-4">
-                        <button class="btn-edit-text font-medium" data-action="edit-sale" data-id="${sale.id}">Edit</button>
-                        <button class="text-green-600 hover:text-green-800 font-medium" data-action="view-receipt" data-id="${sale.id}">View Receipt</button>
-                    </td>
-                </tr>`).join('');
+            tableBody.innerHTML = sales.sort((a, b) => new Date(b.date) - new Date(a.date)).map(sale => {
+                const customer = allCustomers.find(c => c.id === sale.customerId);
+                const currentDue = customer ? customer.due : 0;
+                return `
+                    <tr class="hover:bg-slate-50">
+                        <td class="py-3 px-4">${new Date(sale.date).toLocaleDateString()}</td>
+                        <td class="py-3 px-4">${sale.customerName}</td>
+                        <td class="py-3 px-4">${sale.items.length}</td>
+                        <td class="py-3 px-4 text-right">${(sale.total || 0).toFixed(2)}</td>
+                        <td class="py-3 px-4 text-right font-semibold ${currentDue > 0 ? 'text-red-600' : 'text-green-600'}">${currentDue.toFixed(2)}</td>
+                        <td class="py-3 px-4 text-center space-x-4">
+                            <button class="btn-edit-text font-medium" data-action="edit-sale" data-id="${sale.id}">Edit</button>
+                            <button class="text-green-600 hover:text-green-800 font-medium" data-action="view-receipt" data-id="${sale.id}">View Receipt</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
         };
 
         const populateLedgerCustomerDropdown = (customers) => {
@@ -1185,6 +1191,22 @@
                         <td class="p-2 text-right">${(item.price * item.quantity).toFixed(2)}</td>
                     </tr>
                 `).join('');
+
+                const transactionsRef = collection(db, `artifacts/${appId}/users/${currentUserId}/customers/${sale.customerId}/transactions`);
+                const q = query(transactionsRef, where("date", ">", new Date(sale.date)));
+                const querySnapshot = await getDocs(q);
+                let paymentsHtml = '';
+                if (!querySnapshot.empty) {
+                    paymentsHtml += `<h3 class="text-lg font-semibold mb-2 mt-4">Payments Received Since This Invoice</h3><table class="w-full text-left">`;
+                    querySnapshot.forEach(doc => {
+                        const payment = doc.data();
+                        if (payment.type === 'payment') {
+                            paymentsHtml += `<tr class="border-b"><td class="p-2">${new Date(payment.date.seconds * 1000).toLocaleDateString()}</td><td class="p-2 text-right text-green-600">Paid: ${payment.amount.toFixed(2)}</td></tr>`;
+                        }
+                    });
+                    paymentsHtml += `</table>`;
+                }
+                document.getElementById('receipt-payments-details').innerHTML = paymentsHtml;
 
                 document.getElementById('receipt-total').innerHTML = `
                     <p>Balance Before This Sale: BDT ${(sale.previousDue || 0).toFixed(2)}</p>
