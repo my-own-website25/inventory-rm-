@@ -409,7 +409,7 @@
     <!-- Firebase SDK -->
     <script type="module">
         // Firebase Config
-    const firebaseConfig = {
+   const firebaseConfig = {
   apiKey: "AIzaSyCVwr4gRAqgF7r8tyvLTyYGt8CQcsJV160",
   authDomain: "rm-inventory-e29db.firebaseapp.com",
   projectId: "rm-inventory-e29db",
@@ -483,7 +483,7 @@
                 allCustomers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 populateCustomerTable(allCustomers);
                 populateLedgerCustomerDropdown(allCustomers);
-                populateSaleCustomerDropdown(allCustomers); // FIX: This was missing
+                populateSaleCustomerDropdown(allCustomers);
             }, err => updateStatus(`Error loading customers: ${err.message}`, true));
 
             onSnapshot(collection(db, `${path}/sales`), snap => {
