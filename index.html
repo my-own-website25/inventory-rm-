@@ -409,7 +409,7 @@
     <!-- Firebase SDK -->
     <script type="module">
         // Firebase Config
-    const firebaseConfig = {
+const firebaseConfig = {
   apiKey: "AIzaSyCVwr4gRAqgF7r8tyvLTyYGt8CQcsJV160",
   authDomain: "rm-inventory-e29db.firebaseapp.com",
   projectId: "rm-inventory-e29db",
@@ -1185,9 +1185,11 @@
                 `).join('');
 
                 document.getElementById('receipt-total').innerHTML = `
-                    <p>Previous Due: BDT ${(sale.previousDue || 0).toFixed(2)}</p>
-                    <p>This Sale: BDT ${sale.total.toFixed(2)}</p>
-                    <p class="text-xl font-bold">New Total Due: BDT ${(sale.newDue || 0).toFixed(2)}</p>
+                    <p>Balance Before This Sale: BDT ${(sale.previousDue || 0).toFixed(2)}</p>
+                    <p>This Sale Amount: BDT ${sale.total.toFixed(2)}</p>
+                    <p>Balance After This Sale: BDT ${(sale.newDue || 0).toFixed(2)}</p>
+                    <hr class="my-2">
+                    <p class="text-xl font-bold">Customer's Current Total Due: BDT ${(customer.due || 0).toFixed(2)}</p>
                 `;
                 document.getElementById('receiptModal').classList.add('active');
              }
@@ -1227,14 +1229,18 @@
                 alert("No sales found in the selected date range.");
                 return;
             }
-            exportToExcel(filteredSales);
+            exportToExcel(filteredSales, allCustomers);
         }
 
-        function exportToExcel(data, filename = 'sales-report.csv') {
-            let csvContent = "Date,Customer Name,Item Name,Quantity,Price,Subtotal,Total Due\r\n";
-            data.forEach(sale => {
+        function exportToExcel(salesData, customersData, filename = 'sales-report.csv') {
+            let csvContent = "Date,Customer Name,Item Name,Quantity,Price,Subtotal,Balance After Sale,Customer's Current Due\r\n";
+            salesData.forEach(sale => {
                 const saleDate = new Date(sale.date).toLocaleDateString();
-                const customerName = sale.customerName.replace(/,/g, ''); // Remove commas from names
+                const customerName = sale.customerName.replace(/,/g, '');
+                const customer = customersData.find(c => c.id === sale.customerId);
+                const currentDue = customer ? customer.due.toFixed(2) : '0.00';
+                const balanceAfterSale = (sale.newDue || 0).toFixed(2);
+
                 sale.items.forEach(item => {
                     const row = [
                         saleDate,
@@ -1243,7 +1249,8 @@
                         item.quantity,
                         item.price.toFixed(2),
                         (item.quantity * item.price).toFixed(2),
-                        (sale.newDue || 0).toFixed(2)
+                        balanceAfterSale,
+                        currentDue
                     ].join(',');
                     csvContent += row + "\r\n";
                 });
