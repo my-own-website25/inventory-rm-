@@ -348,7 +348,7 @@
                             <tbody id="receiptItemsTableBody"></tbody>
                          </table>
                     </div>
-                    <div id="receipt-total" class="text-right font-bold text-2xl mt-6 border-t pt-4"></div>
+                    <div id="receipt-total" class="text-right font-bold text-lg mt-6 border-t pt-4 space-y-2"></div>
                      <div class="text-center mt-8 text-xs text-slate-500"><p>Thank you for your business!</p></div>
                 </div>
                 <div class="flex justify-end space-x-4 mt-6 no-print">
@@ -409,7 +409,7 @@
     <!-- Firebase SDK -->
     <script type="module">
         // Firebase Config
-   const firebaseConfig = {
+    const firebaseConfig = {
   apiKey: "AIzaSyCVwr4gRAqgF7r8tyvLTyYGt8CQcsJV160",
   authDomain: "rm-inventory-e29db.firebaseapp.com",
   projectId: "rm-inventory-e29db",
@@ -433,6 +433,7 @@
         // Global State
         let currentUserId = null;
         let saleItems = [], allSales = [], allItems = [], allCustomers = [], allCategories = [];
+        let unsubscribeLedger; // To detach ledger listener when changing customers
 
         // --- UI Elements ---
         const loginScreen = document.getElementById('login-screen');
@@ -714,6 +715,44 @@
             }
         });
         
+        document.getElementById('ledgerCustomerSelect').addEventListener('change', (e) => {
+            const customerId = e.target.value;
+            const ledgerDetails = document.getElementById('ledgerDetails');
+            if (unsubscribeLedger) unsubscribeLedger(); // Detach previous listener
+
+            if (!customerId) {
+                ledgerDetails.innerHTML = '<p class="text-slate-500">Select a customer to view their transaction history.</p>';
+                return;
+            }
+            
+            const transactionsRef = collection(db, `artifacts/${appId}/users/${currentUserId}/customers/${customerId}/transactions`);
+            const q = query(transactionsRef);
+            
+            unsubscribeLedger = onSnapshot(q, (snapshot) => {
+                const transactions = snapshot.docs.map(doc => doc.data());
+                transactions.sort((a,b) => b.date.toDate() - a.date.toDate());
+                const customer = allCustomers.find(c => c.id === customerId);
+                const runningBalance = customer ? customer.due : 0;
+
+                ledgerDetails.innerHTML = `
+                    <h3 class="text-2xl font-bold mb-4">Total Due: ${runningBalance.toFixed(2)} BDT</h3>
+                    <table class="min-w-full bg-white">
+                        <thead class="bg-slate-50"><tr><th class="p-2 text-left">Date</th><th class="p-2 text-left">Details</th><th class="p-2 text-right">Debit (Sale)</th><th class="p-2 text-right">Credit (Paid)</th></tr></thead>
+                        <tbody>
+                            ${transactions.map(t => `
+                                <tr class="border-b">
+                                    <td class="p-2">${new Date(t.date.seconds * 1000).toLocaleDateString()}</td>
+                                    <td class="p-2">${t.type === 'sale' ? `Sale #${(t.saleId || '').substring(0,5)}` : 'Payment'}</td>
+                                    <td class="p-2 text-right text-red-600">${t.type === 'sale' ? t.amount.toFixed(2) : ''}</td>
+                                    <td class="p-2 text-right text-green-600">${t.type === 'payment' ? t.amount.toFixed(2) : ''}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+            });
+        });
+
         // --- FORM SUBMISSIONS ---
         document.getElementById('itemForm').addEventListener('submit', handleItemFormSubmit);
         document.getElementById('customerForm').addEventListener('submit', handleCustomerFormSubmit);
@@ -790,6 +829,8 @@
             const customerDocRef = doc(db, `artifacts/${appId}/users/${currentUserId}/customers`, customerId);
             const customerDoc = await getDoc(customerDocRef);
             const customerName = customerDoc.exists() ? customerDoc.data().name : 'Unknown';
+            const previousDue = customerDoc.exists() ? customerDoc.data().due : 0;
+
 
             if (!customerId || saleItems.length === 0) {
                 alert("Please select a customer and add at least one item.");
@@ -797,13 +838,16 @@
             }
             
             const total = saleItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            const newDue = previousDue + total;
 
             const saleData = {
                 customerId,
                 customerName,
                 items: saleItems,
                 date: new Date().toISOString(),
-                total: total
+                total: total,
+                previousDue: previousDue,
+                newDue: newDue
             };
 
             const batch = writeBatch(db);
@@ -816,8 +860,12 @@
                     const originalTotal = originalSale.total;
                     
                     const totalDifference = total - originalTotal;
-                    const newDue = (customerDoc.data().due || 0) + totalDifference;
-                    batch.update(customerDocRef, { due: newDue });
+                    const finalDue = (customerDoc.data().due || 0) + totalDifference;
+                    batch.update(customerDocRef, { due: finalDue });
+                    
+                    saleData.newDue = finalDue;
+                    saleData.previousDue = finalDue - total;
+
 
                     const originalQuantities = {};
                     originalSale.items.forEach(item => { originalQuantities[item.id] = item.quantity; });
@@ -844,7 +892,6 @@
                     saleRef = doc(collection(db, `artifacts/${appId}/users/${currentUserId}/sales`));
                     batch.set(saleRef, saleData);
                     
-                    const newDue = (customerDoc.data().due || 0) + total;
                     batch.update(customerDocRef, { due: newDue });
 
                     for (const item of saleItems) {
@@ -1137,7 +1184,11 @@
                     </tr>
                 `).join('');
 
-                document.getElementById('receipt-total').innerHTML = `Total: BDT ${sale.total.toFixed(2)}`;
+                document.getElementById('receipt-total').innerHTML = `
+                    <p>Previous Due: BDT ${(sale.previousDue || 0).toFixed(2)}</p>
+                    <p>This Sale: BDT ${sale.total.toFixed(2)}</p>
+                    <p class="text-xl font-bold">New Total Due: BDT ${(sale.newDue || 0).toFixed(2)}</p>
+                `;
                 document.getElementById('receiptModal').classList.add('active');
              }
         }
@@ -1180,7 +1231,7 @@
         }
 
         function exportToExcel(data, filename = 'sales-report.csv') {
-            let csvContent = "Date,Customer Name,Item Name,Quantity,Price,Subtotal\r\n";
+            let csvContent = "Date,Customer Name,Item Name,Quantity,Price,Subtotal,Total Due\r\n";
             data.forEach(sale => {
                 const saleDate = new Date(sale.date).toLocaleDateString();
                 const customerName = sale.customerName.replace(/,/g, ''); // Remove commas from names
@@ -1191,7 +1242,8 @@
                         item.name.replace(/,/g, ''),
                         item.quantity,
                         item.price.toFixed(2),
-                        (item.quantity * item.price).toFixed(2)
+                        (item.quantity * item.price).toFixed(2),
+                        (sale.newDue || 0).toFixed(2)
                     ].join(',');
                     csvContent += row + "\r\n";
                 });
