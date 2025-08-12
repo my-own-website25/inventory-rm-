@@ -17,6 +17,9 @@
         .tab-content.active, #main-app.active, #login-screen.active { display: block; }
         .modal { display: none; }
         .modal.active { display: flex; }
+        #saleModal { z-index: 50; }
+        #customerModal { z-index: 60; }
+
         .tab-btn.active-tab {
             background-color: #3b82f6;
             color: white;
@@ -423,7 +426,7 @@
     <!-- Firebase SDK -->
     <script type="module">
         // Firebase Config
-  const firebaseConfig = {
+   const firebaseConfig = {
   apiKey: "AIzaSyCVwr4gRAqgF7r8tyvLTyYGt8CQcsJV160",
   authDomain: "rm-inventory-e29db.firebaseapp.com",
   projectId: "rm-inventory-e29db",
@@ -691,7 +694,6 @@
             });
 
             const totalSalesValue = filteredSales.reduce((sum, sale) => sum + (sale.total || 0), 0);
-            const totalItemsSold = filteredSales.reduce((sum, sale) => sum + sale.items.reduce((itemSum, item) => itemSum + item.quantity, 0), 0);
 
             const dailySalesContainer = document.getElementById('dailySalesContainer');
             if(filteredSales.length === 0){
@@ -1303,7 +1305,7 @@
         function exportToExcelHandler() {
             const startDateValue = document.getElementById('startDate').value;
             const endDateValue = document.getElementById('endDate').value;
-            if (!startDateValue || !endDateValue) {
+            if (!startDateValue && !endDateValue) {
                 alert("Please select a start and end date for the report.");
                 return;
             }
