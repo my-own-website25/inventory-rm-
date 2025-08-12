@@ -312,7 +312,10 @@
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
                             <label for="saleCustomer" class="block text-sm font-medium text-slate-600 mb-1">Select Customer</label>
-                            <select id="saleCustomer" class="w-full p-3 border border-slate-300 rounded-lg" required></select>
+                            <div class="flex space-x-2">
+                                <select id="saleCustomer" class="w-full p-3 border border-slate-300 rounded-lg" required></select>
+                                <button type="button" data-action="add-customer-from-sale" class="btn btn-secondary">+</button>
+                            </div>
                         </div>
                         <div>
                             <label for="saleItem" class="block text-sm font-medium text-slate-600 mb-1">Select Item</label>
@@ -420,7 +423,7 @@
     <!-- Firebase SDK -->
     <script type="module">
         // Firebase Config
-      const firebaseConfig = {
+  const firebaseConfig = {
   apiKey: "AIzaSyCVwr4gRAqgF7r8tyvLTyYGt8CQcsJV160",
   authDomain: "rm-inventory-e29db.firebaseapp.com",
   projectId: "rm-inventory-e29db",
@@ -445,6 +448,7 @@
         let currentUserId = null;
         let saleItems = [], allSales = [], allItems = [], allCustomers = [], allCategories = [];
         let unsubscribeLedger; // To detach ledger listener when changing customers
+        let isAddingCustomerFromSale = false;
 
         // --- UI Elements ---
         const loginScreen = document.getElementById('login-screen');
@@ -763,6 +767,7 @@
                 case 'remove-sale-item': removeSaleItem(parseInt(target.dataset.index, 10)); break;
                 case 'open-payment-modal': openPaymentModal(); break;
                 case 'export-excel': exportToExcelHandler(); break;
+                case 'add-customer-from-sale': openCustomerModal(true); break;
             }
         });
 
@@ -874,8 +879,13 @@
                     
                     customerData.code = `RM-${String(newCount).padStart(3, '0')}`;
                     customerData.due = 0; // New customers start with 0 due
-                    await addDoc(collection(db, `artifacts/${appId}/users/${currentUserId}/customers`), customerData);
+                    const newCustomerRef = await addDoc(collection(db, `artifacts/${appId}/users/${currentUserId}/customers`), customerData);
                     await setDoc(counterRef, { count: newCount }, { merge: true });
+
+                    if (isAddingCustomerFromSale) {
+                        document.getElementById('saleCustomer').value = newCustomerRef.id;
+                        isAddingCustomerFromSale = false;
+                    }
                 }
                 closeModal(document.querySelector('#customerModal'));
             } catch (err) {
@@ -1100,7 +1110,8 @@
             document.getElementById('itemModal').classList.add('active');
         }
 
-        function openCustomerModal() {
+        function openCustomerModal(fromSale = false) {
+            isAddingCustomerFromSale = fromSale;
             document.getElementById('customerForm').reset();
             document.getElementById('customerId').value = '';
             document.getElementById('customerModalTitle').innerText = 'Add New Customer';
@@ -1290,13 +1301,17 @@
         }
         
         function exportToExcelHandler() {
-            const startDate = new Date(document.getElementById('startDate').value);
-            const endDate = new Date(document.getElementById('endDate').value);
-            if (!document.getElementById('startDate').value || !document.getElementById('endDate').value) {
+            const startDateValue = document.getElementById('startDate').value;
+            const endDateValue = document.getElementById('endDate').value;
+            if (!startDateValue || !endDateValue) {
                 alert("Please select a start and end date for the report.");
                 return;
             }
-            endDate.setHours(23, 59, 59, 999); // Include the whole end day
+
+            const startDate = new Date(startDateValue);
+            startDate.setHours(0, 0, 0, 0);
+            const endDate = new Date(endDateValue);
+            endDate.setHours(23, 59, 59, 999);
 
             const filteredSales = allSales.filter(sale => {
                 const saleDate = new Date(sale.date);
